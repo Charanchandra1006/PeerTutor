@@ -1,0 +1,30 @@
+{
+  "name": "ptm-platform",
+  "version": "1.0.0",
+  "description": "Peer Tutoring Marketplace — Full-stack platform for college peer learning",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:ai": "cd ai-engine && uvicorn app.main:app --reload --port 8000",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test": "npm run test:backend && npm run test:frontend",
+    "lint": "cd backend && npm run lint && cd ../frontend && npm run lint",
+    "docker:dev": "docker-compose up -d",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "docker:down": "docker-compose down",
+    "seed": "cd backend && node src/seed.js",
+    "version": "standard-version",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "husky": "^9.0.11",
+    "standard-version": "^9.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

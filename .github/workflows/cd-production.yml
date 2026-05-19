@@ -1,0 +1,35 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build production images
+        run: |
+          docker build -t ptm-api:${{ github.ref_name }} ./backend
+          docker build -t ptm-ai-engine:${{ github.ref_name }} ./ai-engine
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/ptm-platform
+            git fetch --tags
+            git checkout ${{ github.ref_name }}
+            docker-compose -f docker-compose.prod.yml pull
+            docker-compose -f docker-compose.prod.yml up -d --no-deps api ai-engine worker
+            sleep 15
+            curl -f http://localhost:3000/health || exit 1
+            echo "Production deploy successful: ${{ github.ref_name }}"

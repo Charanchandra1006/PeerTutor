@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # ── MongoDB with Replica Set ──
+  mongodb:
+    image: mongo:7
+    container_name: ptm-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./infra/mongo/rs-init.sh:/scripts/rs-init.sh:ro
+    command: mongod --replSet rs0 --bind_ip_all
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ptm-network
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    container_name: ptm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ptm-network
+
+  # ── Backend API ──
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ptm-api
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AI_ENGINE_URL=http://ai-engine:8000
+    volumes:
+      - ./backend/src:/app/src
+      - /app/node_modules
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run dev
+    networks:
+      - ptm-network
+
+  # ── Frontend (Vite Dev Server) ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ptm-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://api:3000
+    volumes:
+      - ./frontend/src:/app/src
+      - /app/node_modules
+    depends_on:
+      - api
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - ptm-network
+
+  # ── AI Engine (FastAPI) ──
+  ai-engine:
+    build:
+      context: ./ai-engine
+      dockerfile: Dockerfile
+    container_name: ptm-ai-engine
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./ai-engine/app:/app/app
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - ptm-network
+
+  # ── BullMQ Worker ──
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ptm-worker
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend/src:/app/src
+      - /app/node_modules
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: node src/jobs/worker.js
+    networks:
+      - ptm-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  ptm-network:
+    driver: bridge

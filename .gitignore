@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+*.pem
+private.pem
+public.pem
+
+# Build
+dist/
+build/
+.next/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+*.tsbuildinfo
+.eslintcache
+.prettiercache
+
+# Project Documentation / Specifications
+PTM_DB_Schema_and_AI_Prompt.txt
+PTM_FSD.txt
+PTM_PRD.txt
+PTM_TRD.txt
+README.md

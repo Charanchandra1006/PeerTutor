@@ -1,0 +1,72 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+
+      - name: Lint
+        run: cd backend && npm run lint
+
+      - name: Run unit tests
+        run: cd backend && npm run test:unit
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/ptm_test
+          REDIS_URL: redis://localhost:6379
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+          FRONTEND_URL: http://localhost:5173
+          CORS_ORIGIN: http://localhost:5173
+
+      - name: Run integration tests
+        run: cd backend && npm run test:integration
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/ptm_test
+          REDIS_URL: redis://localhost:6379
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+          FRONTEND_URL: http://localhost:5173
+          CORS_ORIGIN: http://localhost:5173
+
+      - name: Security audit
+        run: cd backend && npm audit --audit-level=critical
+        continue-on-error: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install AI engine deps
+        run: cd ai-engine && pip install -r requirements.txt
+
+      - name: Build Docker image
+        run: docker build -t ptm-api ./backend
