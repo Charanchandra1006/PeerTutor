@@ -6,6 +6,7 @@ __pycache__/
 venv/
 
 # Environment
+.env.example
 .env
 .env.local
 .env.development
@@ -56,3 +57,4 @@ PTM_FSD.txt
 PTM_PRD.txt
 PTM_TRD.txt
 README.md
+PTM_FSD.docx
