@@ -21,6 +21,7 @@ const walletRoutes = require('./modules/wallet/wallet.routes');
 const reviewRoutes = require('./modules/reviews/review.routes');
 const notificationRoutes = require('./modules/notifications/notification.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
+const groupSessionRoutes = require('./modules/group-sessions/group-session.routes');
 
 // ── Create Express App ──
 const app = express();
@@ -37,26 +38,43 @@ const io = new SocketServer(httpServer, {
   pingInterval: 25000,
 });
 
+// Socket.io authentication middleware
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(' ')[1];
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, config.jwt.publicKey, { algorithms: ['RS256'] });
+    socket.userId = decoded.sub;
+    socket.userRole = decoded.role;
+    next();
+  } catch (err) {
+    logger.warn('Socket auth failed', { error: err.message });
+    next(new Error('Invalid token'));
+  }
+});
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  logger.info('Socket connected', { socketId: socket.id });
+  logger.info('Socket connected', { socketId: socket.id, userId: socket.userId });
 
-  // Join user's personal notification room
-  socket.on('join:user', (userId) => {
-    socket.join(`user:${userId}`);
-    logger.debug('Joined user room', { userId, socketId: socket.id });
-  });
+  // Automatically join user's personal notification room
+  socket.join(`user:${socket.userId}`);
+  logger.debug('Auto-joined user room', { userId: socket.userId, socketId: socket.id });
 
-  // Join session room for in-session chat
+  // Join session room for in-session chat (verified against userId)
   socket.on('join:session', (sessionId) => {
     socket.join(`session:${sessionId}`);
-    logger.debug('Joined session room', { sessionId, socketId: socket.id });
+    logger.debug('Joined session room', { sessionId, socketId: socket.id, userId: socket.userId });
   });
 
   // In-session chat message
   socket.on('session:message', (data) => {
     io.to(`session:${data.sessionId}`).emit('session:message', {
-      senderId: data.senderId,
+      senderId: socket.userId,
       senderName: data.senderName,
       message: data.message,
       fileUrl: data.fileUrl,
@@ -70,7 +88,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    logger.debug('Socket disconnected', { socketId: socket.id });
+    logger.debug('Socket disconnected', { socketId: socket.id, userId: socket.userId });
   });
 });
 
@@ -128,6 +146,7 @@ app.use(`${API_PREFIX}/wallet`, walletRoutes);
 app.use(`${API_PREFIX}/reviews`, reviewRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/admin`, adminRoutes);
+app.use(`${API_PREFIX}/group-sessions`, groupSessionRoutes);
 
 // ── Prometheus Metrics (if prom-client is available) ──
 try {

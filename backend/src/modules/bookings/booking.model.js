@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 /**
  * Session Schema
  * Collection: sessions
- * Supports both 1-on-1 and group sessions (up to 8 students)
+ * Supports both 1-on-1 and group sessions (up to 50 students)
  */
 const sessionSchema = new mongoose.Schema(
   {
@@ -31,7 +31,22 @@ const sessionSchema = new mongoose.Schema(
     max_participants: {
       type: Number,
       default: 1,
-      max: 8,
+      max: 50,
+    },
+    // Group session metadata
+    title: {
+      type: String,
+      maxlength: 200,
+      trim: true,
+    },
+    description: {
+      type: String,
+      maxlength: 2000,
+      trim: true,
+    },
+    credits_per_student: {
+      type: Number,
+      min: 1,
     },
     subject_id: {
       type: mongoose.Schema.Types.ObjectId,
@@ -101,6 +116,20 @@ const sessionSchema = new mongoose.Schema(
       file_url: String,
       sent_at: { type: Date, default: Date.now },
     }],
+    // Attendance tracking for group sessions
+    attendance: [{
+      student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      joined_at: { type: Date },
+      left_at: { type: Date },
+      duration_seconds: { type: Number, default: 0 },
+    }],
+    // Post-session materials uploaded by tutor
+    post_session_materials: [{
+      title: { type: String, required: true, maxlength: 200 },
+      file_url: { type: String, required: true },
+      uploaded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      uploaded_at: { type: Date, default: Date.now },
+    }],
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -111,6 +140,7 @@ const sessionSchema = new mongoose.Schema(
 sessionSchema.index({ tutor_id: 1, status: 1, scheduled_at: 1 });
 sessionSchema.index({ student_id: 1, status: 1 });
 sessionSchema.index({ scheduled_at: 1 }); // For reminder queries
+sessionSchema.index({ is_group_session: 1, status: 1, scheduled_at: 1 }); // Group session discovery
 
 const Session = mongoose.model('Session', sessionSchema);
 

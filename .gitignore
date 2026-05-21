@@ -5,8 +5,7 @@ __pycache__/
 .venv/
 venv/
 
-# Environment
-.env.example
+# Environment (only .env with real secrets — NOT the .env.example template)
 .env
 .env.local
 .env.development
@@ -51,10 +50,10 @@ docker-compose.override.yml
 .eslintcache
 .prettiercache
 
-# Project Documentation / Specifications
-PTM_DB_Schema_and_AI_Prompt.txt
+
 PTM_FSD.txt
-PTM_PRD.txt
 PTM_TRD.txt
-README.md
+PTM_PRD.txt
 PTM_FSD.docx
+PTM_DB_Schema_and_AI_Prompt.txt
+README.md

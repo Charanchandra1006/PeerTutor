@@ -1,4 +1,7 @@
-
+# ═══════════════════════════════════════════════════════════════
+# PTM Platform — Production Docker Compose
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+# ═══════════════════════════════════════════════════════════════
 
 services:
   # ── MongoDB with Replica Set ──
@@ -16,27 +19,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - ptm-network
 
-  # ── Redis ──
-  redis:
-    image: redis:7-alpine
-    container_name: ptm-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - ptm-network
-
-  # ── MongoDB Replica Set Initialization ──
+  # ── MongoDB Replica Set Init ──
   mongo-init:
     image: mongo:7
     container_name: ptm-mongo-init
@@ -57,7 +44,25 @@ services:
     networks:
       - ptm-network
 
-  # ── Backend API ──
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    container_name: ptm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ptm-network
+
+  # ── Backend API (Production) ──
   api:
     build:
       context: ./backend
@@ -68,40 +73,36 @@ services:
     env_file:
       - .env
     environment:
+      - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - AI_ENGINE_URL=http://ai-engine:8000
-    volumes:
-      - ./backend/src:/app/src
-      - /app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: npm run dev
+      mongo-init:
+        condition: service_completed_successfully
+    command: node src/server.js
+    restart: unless-stopped
     networks:
       - ptm-network
 
-  # ── Frontend (Vite Dev Server) ──
+  # ── Frontend (Production — served by Nginx) ──
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: ptm-frontend
     ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://api:3000
-    volumes:
-      - ./frontend/src:/app/src
-      - /app/node_modules
+      - "80:80"
     depends_on:
       - api
-    command: npm run dev -- --host 0.0.0.0
+    restart: unless-stopped
     networks:
       - ptm-network
 
-  # ── AI Engine (FastAPI) ──
+  # ── AI Engine (FastAPI — Production) ──
   ai-engine:
     build:
       context: ./ai-engine
@@ -113,18 +114,17 @@ services:
       - .env
     environment:
       - REDIS_URL=redis://redis:6379
-    volumes:
-      - ./ai-engine/app:/app/app
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    restart: unless-stopped
     networks:
       - ptm-network
 
-  # ── BullMQ Worker ──
+  # ── BullMQ Worker (Production) ──
   worker:
     build:
       context: ./backend
@@ -133,16 +133,15 @@ services:
     env_file:
       - .env
     environment:
+      - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
-    volumes:
-      - ./backend/src:/app/src
-      - /app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
     command: node src/jobs/worker.js
+    restart: unless-stopped
     networks:
       - ptm-network
 

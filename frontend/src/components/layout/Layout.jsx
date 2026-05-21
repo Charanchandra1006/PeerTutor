@@ -1,16 +1,19 @@
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
+import { useUnreadCount } from '../../hooks/useNotifications';
 import { cn, getInitials } from '../../lib/utils';
+import api from '../../lib/api';
 import {
   LayoutDashboard, Search, CalendarDays, Wallet, User,
-  GraduationCap, Shield, Bell, LogOut, Menu, X, ChevronDown,
+  GraduationCap, Shield, Bell, LogOut, Menu, X, ChevronDown, Users
 } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/discover', label: 'Find Tutors', icon: Search },
   { to: '/bookings', label: 'Bookings', icon: CalendarDays },
+  { to: '/group-sessions', label: 'Group Sessions', icon: Users },
   { to: '/wallet', label: 'Wallet', icon: Wallet },
   { to: '/profile', label: 'Profile', icon: User },
 ];
@@ -19,10 +22,10 @@ export default function Layout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { data: unreadCount = 0 } = useUnreadCount();
 
   const handleLogout = async () => {
     try {
-      const api = (await import('../../lib/api')).default;
       await api.post('/auth/logout');
     } catch {}
     logout();
@@ -165,9 +168,11 @@ export default function Layout() {
             {/* Notifications */}
             <button className="relative rounded-lg p-2 text-gray-500 hover:bg-gray-100 transition-colors">
               <Bell className="h-5 w-5" />
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                3
-              </span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* User Dropdown */}

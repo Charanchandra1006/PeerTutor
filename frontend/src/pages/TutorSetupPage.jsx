@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { GraduationCap, BookOpen, DollarSign, Clock, Plus, Save, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { GraduationCap, BookOpen, DollarSign, Clock, Plus, Save, Loader2, Tags } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -14,6 +14,19 @@ export default function TutorSetupPage() {
     languages: ['English'],
   });
   const [loading, setLoading] = useState(false);
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const res = await api.get('/tutors/subjects');
+        setAvailableSubjects(res.data || []);
+      } catch (err) {
+        toast.error('Failed to load subjects');
+      }
+    };
+    fetchSubjects();
+  }, []);
 
   const addSlot = () => {
     setForm({
@@ -28,12 +41,26 @@ export default function TutorSetupPage() {
     setForm({ ...form, availability: slots });
   };
 
+  const toggleSubject = (subjectId) => {
+    setForm((prev) => ({
+      ...prev,
+      subjects: prev.subjects.includes(subjectId)
+        ? prev.subjects.filter((id) => id !== subjectId)
+        : [...prev.subjects, subjectId]
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (form.subjects.length === 0) {
+      toast.error('Please select at least one subject');
+      return;
+    }
     setLoading(true);
     try {
       await api.post('/tutors/profile', form);
       toast.success('Tutor profile created!');
+      // Could redirect to dashboard or profile here
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Failed to create profile');
     }
@@ -68,6 +95,38 @@ export default function TutorSetupPage() {
             required
           />
           <p className="text-xs text-gray-400 mt-1">{form.bio.length}/500 characters</p>
+        </div>
+
+        {/* Subjects */}
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Tags className="h-5 w-5 text-purple-500" /> Subjects you can teach
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {availableSubjects.map((subject) => {
+              const isSelected = form.subjects.includes(subject._id);
+              return (
+                <button
+                  key={subject._id}
+                  type="button"
+                  onClick={() => toggleSubject(subject._id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+                    isSelected 
+                      ? 'bg-brand-50 border-brand-200 text-brand-700'
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {subject.name}
+                </button>
+              );
+            })}
+            {availableSubjects.length === 0 && (
+              <p className="text-sm text-gray-500">Loading subjects...</p>
+            )}
+          </div>
+          {form.subjects.length === 0 && (
+            <p className="text-xs text-red-500 mt-2">Please select at least one subject</p>
+          )}
         </div>
 
         {/* Rate */}

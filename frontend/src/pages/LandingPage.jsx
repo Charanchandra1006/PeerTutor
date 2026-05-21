@@ -129,7 +129,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-gray-200 py-8 px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-sm text-gray-500">
-          <span>© 2024 PeerTutor Marketplace. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} PeerTutor Marketplace. All rights reserved.</span>
           <span>Built with ❤️ by Vardhaman Students</span>
         </div>
       </footer>

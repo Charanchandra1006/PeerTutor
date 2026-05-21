@@ -14,6 +14,9 @@ import ProfilePage from './pages/ProfilePage';
 import TutorSetupPage from './pages/TutorSetupPage';
 import AdminDashboard from './pages/AdminDashboard';
 import LandingPage from './pages/LandingPage';
+import GroupSessionsPage from './pages/GroupSessionsPage';
+import GroupSessionDetailPage from './pages/GroupSessionDetailPage';
+import CreateGroupSessionPage from './pages/CreateGroupSessionPage';
 
 /**
  * Protected route wrapper
@@ -52,6 +55,16 @@ export default function App() {
         <Route path="/wallet" element={<WalletPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/become-tutor" element={<TutorSetupPage />} />
+        <Route path="/group-sessions" element={<GroupSessionsPage />} />
+        <Route path="/group-sessions/:id" element={<GroupSessionDetailPage />} />
+        <Route
+          path="/group-sessions/create"
+          element={
+            <ProtectedRoute roles={['tutor', 'both']}>
+              <CreateGroupSessionPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/*"
           element={

@@ -10,7 +10,6 @@ Algorithm:
 Cold start: if <5 sessions → keyword match + rating only
 """
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 from bson import ObjectId
 
 

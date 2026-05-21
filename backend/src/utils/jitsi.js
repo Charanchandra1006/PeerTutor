@@ -15,7 +15,9 @@ const logger = require('./logger');
  * @returns {string} Full Jitsi room URL
  */
 const generateJitsiLink = (sessionId, subjectName = 'Session') => {
-  const roomName = `ptm-${subjectName.replace(/\s+/g, '-').toLowerCase()}-${sessionId.slice(-8)}`;
+  const safeId = sessionId ? sessionId.toString() : uuidv4();
+  const safeName = subjectName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+  const roomName = `ptm-${safeName}-${safeId.slice(-8)}`;
   const baseUrl = config.jitsi.baseUrl || 'https://meet.jit.si';
   return `${baseUrl}/${roomName}`;
 };

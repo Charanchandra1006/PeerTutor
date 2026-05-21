@@ -146,34 +146,32 @@ class AuthService {
   async refreshToken(refreshToken) {
     const redis = getRedis();
 
-    // Hash the provided token to compare with stored hash
+    // Hash the provided token for O(1) reverse lookup
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-    // Find which user this refresh token belongs to
-    const keys = await redis.keys('auth:refresh:*');
-
-    let userId = null;
-    for (const key of keys) {
-      const storedHash = await redis.get(key);
-      if (storedHash === tokenHash) {
-        userId = key.split(':')[2]; // auth:refresh:{userId}
-        break;
-      }
-    }
+    // O(1) lookup: reverse key maps tokenHash → userId
+    const userId = await redis.get(`auth:refresh_lookup:${tokenHash}`);
 
     if (!userId) {
+      throw new AppError(errorCodes.AUTH_REFRESH_TOKEN_INVALID, 'Invalid or expired refresh token', 401);
+    }
+
+    // Verify the forward key still matches (prevents stale lookups)
+    const storedHash = await redis.get(`auth:refresh:${userId}`);
+    if (storedHash !== tokenHash) {
+      await redis.del(`auth:refresh_lookup:${tokenHash}`);
       throw new AppError(errorCodes.AUTH_REFRESH_TOKEN_INVALID, 'Invalid or expired refresh token', 401);
     }
 
     // Get user
     const user = await User.findById(userId);
     if (!user || !user.is_active) {
-      await redis.del(`auth:refresh:${userId}`);
+      await this._deleteRefreshTokenKeys(redis, userId, tokenHash);
       throw new AppError(errorCodes.AUTH_REFRESH_TOKEN_INVALID, 'User not found or suspended', 401);
     }
 
-    // Rotate: delete old refresh token, generate new pair
-    await redis.del(`auth:refresh:${userId}`);
+    // Rotate: delete old refresh token keys, generate new pair
+    await this._deleteRefreshTokenKeys(redis, userId, tokenHash);
 
     const tokens = await this._generateTokens(user);
 
@@ -187,7 +185,11 @@ class AuthService {
    */
   async logout(userId) {
     const redis = getRedis();
-    await redis.del(`auth:refresh:${userId}`);
+    // Clean up both forward and reverse refresh token keys
+    const storedHash = await redis.get(`auth:refresh:${userId}`);
+    if (storedHash) {
+      await this._deleteRefreshTokenKeys(redis, userId, storedHash);
+    }
     logger.info('User logged out', { userId });
   }
 
@@ -210,7 +212,10 @@ class AuthService {
 
     // Invalidate refresh token (force re-login)
     const redis = getRedis();
-    await redis.del(`auth:refresh:${userId}`);
+    const storedHash = await redis.get(`auth:refresh:${userId}`);
+    if (storedHash) {
+      await this._deleteRefreshTokenKeys(redis, userId, storedHash);
+    }
 
     logger.info('Password changed', { userId });
   }
@@ -292,7 +297,10 @@ class AuthService {
     // Cleanup
     await OTP.deleteOne({ email: email.toLowerCase() });
     const redis = getRedis();
-    await redis.del(`auth:refresh:${user._id}`);
+    const storedRefreshHash = await redis.get(`auth:refresh:${user._id}`);
+    if (storedRefreshHash) {
+      await this._deleteRefreshTokenKeys(redis, user._id, storedRefreshHash);
+    }
 
     logger.info('Password reset successful', { userId: user._id });
     return { message: 'Password reset successful. Please log in with your new password.' };
@@ -327,11 +335,30 @@ class AuthService {
     const refreshToken = uuidv4();
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-    // Store hash in Redis with 7-day TTL
+    // Clean up any existing refresh token keys for this user
+    const oldHash = await redis.get(`auth:refresh:${user._id}`);
+    if (oldHash) {
+      await redis.del(`auth:refresh_lookup:${oldHash}`);
+    }
+
+    // Store both forward (userId→hash) and reverse (hash→userId) keys with 7-day TTL
     const ttlSeconds = 7 * 24 * 60 * 60;
-    await redis.set(`auth:refresh:${user._id}`, tokenHash, 'EX', ttlSeconds);
+    const pipeline = redis.pipeline();
+    pipeline.set(`auth:refresh:${user._id}`, tokenHash, 'EX', ttlSeconds);
+    pipeline.set(`auth:refresh_lookup:${tokenHash}`, user._id.toString(), 'EX', ttlSeconds);
+    await pipeline.exec();
 
     return refreshToken;
+  }
+
+  /**
+   * Delete both forward and reverse refresh token keys
+   */
+  async _deleteRefreshTokenKeys(redis, userId, tokenHash) {
+    const pipeline = redis.pipeline();
+    pipeline.del(`auth:refresh:${userId}`);
+    pipeline.del(`auth:refresh_lookup:${tokenHash}`);
+    await pipeline.exec();
   }
 
   /**

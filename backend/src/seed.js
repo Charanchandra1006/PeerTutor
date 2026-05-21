@@ -72,10 +72,9 @@ async function seed() {
 
     // 2. Create admin
     console.log('👤 Creating admin user...');
-    const adminPassword = await bcrypt.hash('Admin@123', 12);
     const admin = await User.create({
       email: 'admin@vardhaman.org',
-      password_hash: adminPassword,
+      password_hash: 'Admin@123',
       name: 'Dr. Kavitha Admin',
       role: 'admin',
       year: null,
@@ -92,12 +91,11 @@ async function seed() {
     const createdTutors = [];
     for (let i = 0; i < tutorData.length; i++) {
       const t = tutorData[i];
-      const password = await bcrypt.hash('Tutor@123', 12);
       const email = `${t.name.split(' ')[0].toLowerCase()}${i + 1}@vardhaman.org`;
 
       const user = await User.create({
         email,
-        password_hash: password,
+        password_hash: 'Tutor@123',
         name: t.name,
         role: 'tutor',
         year: t.year,
@@ -145,12 +143,11 @@ async function seed() {
     const createdStudents = [];
     for (let i = 0; i < studentData.length; i++) {
       const s = studentData[i];
-      const password = await bcrypt.hash('Student@123', 12);
       const email = `${s.name.split(' ')[0].toLowerCase()}${i + 1}@vardhaman.org`;
 
       const user = await User.create({
         email,
-        password_hash: password,
+        password_hash: 'Student@123',
         name: s.name,
         role: 'student',
         year: s.year,
