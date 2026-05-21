@@ -3,60 +3,50 @@ const router = express.Router();
 const authController = require('./auth.controller');
 const { validate } = require('../../middleware/validator');
 const { authenticateToken } = require('../../middleware/auth');
-const { authLimiter } = require('../../middleware/rateLimiter');
+const { authLimiter, refreshTokenLimiter } = require('../../middleware/rateLimiter');
 const {
   registerSchema,
   loginSchema,
-  verifyOtpSchema,
   refreshTokenSchema,
   changePasswordSchema,
-  resendOtpSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
 } = require('./auth.validation');
 
-// All auth endpoints use strict rate limiting (5 req/min)
-router.use(authLimiter);
-
-// ── Public Routes ──
+// ── Public Routes (strict rate limit: 5 req/min) ──
 router.post(
   '/register',
+  authLimiter,
   validate({ body: registerSchema }),
   authController.register
 );
 
 router.post(
-  '/verify-otp',
-  validate({ body: verifyOtpSchema }),
-  authController.verifyOTP
-);
-
-router.post(
   '/login',
+  authLimiter,
   validate({ body: loginSchema }),
   authController.login
 );
 
+// Refresh uses a separate, higher limit (30 req/min) so automatic
+// token refresh doesn't compete with login rate limits
 router.post(
   '/refresh',
+  refreshTokenLimiter,
   validate({ body: refreshTokenSchema }),
   authController.refreshToken
 );
 
 router.post(
-  '/resend-otp',
-  validate({ body: resendOtpSchema }),
-  authController.resendOTP
-);
-
-router.post(
   '/forgot-password',
+  authLimiter,
   validate({ body: forgotPasswordSchema }),
   authController.forgotPassword
 );
 
 router.post(
   '/reset-password',
+  authLimiter,
   validate({ body: resetPasswordSchema }),
   authController.resetPassword
 );

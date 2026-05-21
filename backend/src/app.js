@@ -66,18 +66,37 @@ io.on('connection', (socket) => {
   logger.debug('Auto-joined user room', { userId: socket.userId, socketId: socket.id });
 
   // Join session room for in-session chat (verified against userId)
-  socket.on('join:session', (sessionId) => {
-    socket.join(`session:${sessionId}`);
-    logger.debug('Joined session room', { sessionId, socketId: socket.id, userId: socket.userId });
+  socket.on('join:session', async (sessionId) => {
+    try {
+      const { Session } = require('./modules/bookings/booking.model');
+      const session = await Session.findById(sessionId).populate('tutor_id');
+      if (!session) return;
+      
+      const uid = socket.userId.toString();
+      const isStudent = session.student_id?.toString() === uid;
+      const isGroupMember = session.group_students?.some(s => s.toString() === uid);
+      const tutorUserId = session.tutor_id?.user_id?._id || session.tutor_id?.user_id || session.tutor_id;
+      const isTutor = tutorUserId?.toString() === uid;
+      
+      if (isStudent || isGroupMember || isTutor || socket.userRole === 'admin') {
+        socket.join(`session:${sessionId}`);
+        logger.debug('Joined session room', { sessionId, socketId: socket.id, userId: socket.userId });
+      } else {
+        logger.warn('Unauthorized attempt to join session room', { sessionId, userId: socket.userId });
+      }
+    } catch (err) {
+      logger.error('Error joining session', { error: err.message, sessionId, userId: socket.userId });
+    }
   });
 
   // In-session chat message
   socket.on('session:message', (data) => {
+    const { stripHtml } = require('./utils/sanitize');
     io.to(`session:${data.sessionId}`).emit('session:message', {
       senderId: socket.userId,
-      senderName: data.senderName,
-      message: data.message,
-      fileUrl: data.fileUrl,
+      senderName: stripHtml(data.senderName),
+      message: stripHtml(data.message),
+      fileUrl: data.fileUrl ? stripHtml(data.fileUrl) : null,
       timestamp: new Date(),
     });
   });
@@ -126,13 +145,13 @@ app.use('/api', publicLimiter);
 
 // ── Health Check ──
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: config.env,
-    version: '1.0.0',
-  });
+  const response = { status: 'ok', timestamp: new Date().toISOString() };
+  if (config.env !== 'production') {
+    response.uptime = process.uptime();
+    response.environment = config.env;
+    response.version = '1.0.0';
+  }
+  res.json(response);
 });
 
 // ── API Routes ──
@@ -182,6 +201,22 @@ try {
   });
 
   app.get('/metrics', async (req, res) => {
+    // Basic admin auth check for metrics
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).send('Unauthorized');
+    }
+    try {
+      const token = authHeader.split(' ')[1];
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, config.jwt.publicKey, { algorithms: ['RS256'] });
+      if (decoded.role !== 'admin') {
+        return res.status(403).send('Forbidden');
+      }
+    } catch (err) {
+      return res.status(401).send('Unauthorized');
+    }
+
     res.set('Content-Type', promClient.register.contentType);
     res.end(await promClient.register.metrics());
   });

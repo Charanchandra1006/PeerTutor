@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -10,14 +11,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const login = useAuthStore((state) => state.login);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      await api.post('/auth/register', form);
-      toast.success('Account created! Check your email for the OTP.');
-      navigate('/verify-otp', { state: { email: form.email } });
+      const res = await api.post('/auth/register', form);
+      // api interceptor unwraps res.data, so res is the response payload
+      login(res.data.user, res.data.accessToken, res.data.refreshToken);
+      toast.success('Account created successfully!');
+      navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.error?.message || 'Registration failed');
     } finally {

@@ -1,22 +1,14 @@
 const authService = require('./auth.service');
 const apiResponse = require('../../utils/apiResponse');
-const logger = require('../../utils/logger');
 
 class AuthController {
   /**
    * POST /api/v1/auth/register
+   * Direct registration — no OTP, account is active immediately.
    */
   async register(req, res) {
     const result = await authService.register(req.body);
     return apiResponse.created(res, result);
-  }
-
-  /**
-   * POST /api/v1/auth/verify-otp
-   */
-  async verifyOTP(req, res) {
-    const result = await authService.verifyOTP(req.body);
-    return apiResponse.success(res, result);
   }
 
   /**
@@ -58,14 +50,6 @@ class AuthController {
   async changePassword(req, res) {
     await authService.changePassword(req.user._id, req.body);
     return apiResponse.success(res, { message: 'Password changed successfully' });
-  }
-
-  /**
-   * POST /api/v1/auth/resend-otp
-   */
-  async resendOTP(req, res) {
-    const result = await authService.resendOTP(req.body.email);
-    return apiResponse.success(res, result);
   }
 
   /**

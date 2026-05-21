@@ -37,7 +37,7 @@ const authenticatedLimiter = rateLimit({
 });
 
 /**
- * Auth endpoint limiter: 5 req/min per IP (login, register, OTP)
+ * Auth endpoint limiter: 5 req/min per IP (login, register, forgot-password)
  */
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -48,4 +48,18 @@ const authLimiter = rateLimit({
   keyGenerator: (req) => req.ip,
 });
 
-module.exports = { publicLimiter, authenticatedLimiter, authLimiter };
+/**
+ * Refresh token limiter: 30 req/min per IP
+ * Separated from authLimiter so automatic token refreshes don't
+ * burn through the strict 5 req/min login limit.
+ */
+const refreshTokenLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: createLimiterHandler('Too many token refresh attempts.'),
+  keyGenerator: (req) => req.ip,
+});
+
+module.exports = { publicLimiter, authenticatedLimiter, authLimiter, refreshTokenLimiter };

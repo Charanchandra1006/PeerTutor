@@ -3,7 +3,6 @@ import { useAuthStore } from './stores/authStore';
 import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import VerifyOTPPage from './pages/VerifyOTPPage';
 import DashboardPage from './pages/DashboardPage';
 import DiscoveryPage from './pages/DiscoveryPage';
 import TutorProfilePage from './pages/TutorProfilePage';
@@ -44,7 +43,6 @@ export default function App() {
       <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <LandingPage />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />} />
       <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" /> : <RegisterPage />} />
-      <Route path="/verify-otp" element={<VerifyOTPPage />} />
 
       {/* Protected Routes — Inside Layout */}
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>

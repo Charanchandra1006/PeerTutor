@@ -99,8 +99,10 @@ class TutorService {
 
     // Subject filter
     if (subject) {
+      const { escapeRegex } = require('../../utils/sanitize');
+      const safeSubject = escapeRegex(subject);
       const subjectDoc = await Subject.findOne({
-        $or: [{ _id: subject }, { name: { $regex: subject, $options: 'i' } }],
+        $or: [{ _id: subject }, { name: { $regex: safeSubject, $options: 'i' } }],
       });
       if (subjectDoc) {
         filter.subjects = subjectDoc._id;
@@ -220,8 +222,10 @@ class TutorService {
     }
 
     if (search) {
+      const { escapeRegex } = require('../../utils/sanitize');
+      const safeSearch = escapeRegex(search);
       pipeline.push({
-        $match: { 'resources.title': { $regex: search, $options: 'i' } },
+        $match: { 'resources.title': { $regex: safeSearch, $options: 'i' } },
       });
     }
 
@@ -270,9 +274,11 @@ class TutorService {
     const filter = { is_active };
     if (department) filter.department = department;
     if (search) {
+      const { escapeRegex } = require('../../utils/sanitize');
+      const safeSearch = escapeRegex(search);
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { code: { $regex: search, $options: 'i' } },
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { code: { $regex: safeSearch, $options: 'i' } },
       ];
     }
     return Subject.find(filter).sort({ department: 1, name: 1 });

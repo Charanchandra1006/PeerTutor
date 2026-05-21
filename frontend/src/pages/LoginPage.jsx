@@ -23,13 +23,7 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${user.name}!`);
       navigate('/dashboard');
     } catch (err) {
-      const errorCode = err.response?.data?.error?.code;
-      if (errorCode === 'AUTH_EMAIL_NOT_VERIFIED') {
-        toast.error('Email not verified. Redirecting...');
-        navigate('/verify-otp', { state: { email: form.email } });
-      } else {
-        toast.error(err.response?.data?.error?.message || 'Login failed');
-      }
+      toast.error(err.response?.data?.error?.message || 'Login failed');
     } finally {
       setLoading(false);
     }

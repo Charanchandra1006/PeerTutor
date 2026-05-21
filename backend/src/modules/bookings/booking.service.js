@@ -150,6 +150,7 @@ class BookingService {
 
   /**
    * Get single booking detail
+   * SECURITY: Verifies the requesting user is a participant before returning data.
    */
   async getById(sessionId, userId) {
     const session = await Session.findById(sessionId)
@@ -165,15 +166,22 @@ class BookingService {
       throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Session not found', 404);
     }
 
+    // Ownership check — only participants and the tutor can view
+    this._verifyParticipant(session, userId);
+
     return session;
   }
 
   /**
    * Cancel a booking
+   * SECURITY: Only the student or tutor for this session can cancel.
    */
   async cancelBooking(sessionId, userId, reason) {
     const session = await Session.findById(sessionId);
     if (!session) throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Session not found', 404);
+
+    // Ownership check
+    this._verifyParticipant(session, userId);
 
     if (['completed', 'cancelled'].includes(session.status)) {
       throw new AppError(errorCodes.BOOKING_ALREADY_CANCELLED, 'Booking is already completed or cancelled', 400);
@@ -245,10 +253,14 @@ class BookingService {
 
   /**
    * Save session notes
+   * SECURITY: Only participants can save notes.
    */
   async saveNotes(sessionId, userId, content) {
     const session = await Session.findById(sessionId);
     if (!session) throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Session not found', 404);
+
+    // Ownership check
+    this._verifyParticipant(session, userId);
 
     session.notes = content;
     await session.save();
@@ -258,10 +270,14 @@ class BookingService {
 
   /**
    * Get video link for a session
+   * SECURITY: Only participants can access the video link.
    */
   async getVideoLink(sessionId, userId) {
     const session = await Session.findById(sessionId);
     if (!session) throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Session not found', 404);
+
+    // Ownership check
+    this._verifyParticipant(session, userId);
 
     if (!session.video_link) {
       const subject = await Subject.findById(session.subject_id);
@@ -270,6 +286,34 @@ class BookingService {
     }
 
     return { video_link: session.video_link };
+  }
+
+  /**
+   * Verify that a user is a participant (student, group member, or tutor) of a session.
+   * Throws 403 if the user has no relationship to the session.
+   * @private
+   */
+  _verifyParticipant(session, userId) {
+    const uid = userId.toString();
+    const isStudent = session.student_id?.toString() === uid;
+    const isGroupMember = session.group_students?.some(s => s.toString() === uid);
+
+    // Check tutor — tutor_id can be populated (object) or raw ObjectId
+    let isTutor = false;
+    if (session.tutor_id) {
+      if (session.tutor_id.user_id) {
+        // Populated: tutor_id is a TutorProfile object with user_id
+        const tutorUserId = session.tutor_id.user_id._id || session.tutor_id.user_id;
+        isTutor = tutorUserId.toString() === uid;
+      } else {
+        // Not populated: we need to check by tutor profile ID (less common path)
+        isTutor = session.tutor_id.toString() === uid;
+      }
+    }
+
+    if (!isStudent && !isGroupMember && !isTutor) {
+      throw new AppError(errorCodes.AUTH_FORBIDDEN, 'You do not have access to this session', 403);
+    }
   }
 }
 

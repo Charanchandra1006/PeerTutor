@@ -7,10 +7,16 @@ const { getRedis } = require('../../config/redis');
 const { AppError } = require('../../middleware/errorHandler');
 const errorCodes = require('../../utils/errorCodes');
 const logger = require('../../utils/logger');
+const { timingSafeEqual, generateSecureOTP } = require('../../utils/sanitize');
+
+// ── Constants ──
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION_SECONDS = 15 * 60; // 15 minutes
 
 class AuthService {
   /**
-   * Register a new user
+   * Register a new user.
+   * No OTP verification — account is active immediately.
    */
   async register({ email, password, name, role }) {
     // Validate college email domain
@@ -29,16 +35,17 @@ class AuthService {
       throw new AppError(errorCodes.AUTH_EMAIL_EXISTS, 'Email already registered', 409);
     }
 
-    // Create user with hashed password
+    // Create user — email is verified by default (no OTP flow)
     const user = await User.create({
       email: email.toLowerCase(),
       password_hash: password, // Pre-save hook handles bcrypt hashing
       name,
       role,
+      is_email_verified: true,
     });
 
-    // Generate and store OTP
-    const otp = await this._generateOTP(email);
+    // Generate tokens so user is logged in immediately
+    const tokens = await this._generateTokens(user);
 
     logger.info('User registered', { userId: user._id, email: user.email });
 
@@ -48,60 +55,27 @@ class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
-        is_email_verified: user.is_email_verified,
+        is_email_verified: true,
       },
-      otp, // In production, don't return OTP — send via email only
+      ...tokens,
     };
-  }
-
-  /**
-   * Verify OTP code
-   */
-  async verifyOTP({ email, otp }) {
-    const otpRecord = await OTP.findOne({ email: email.toLowerCase() });
-
-    if (!otpRecord) {
-      throw new AppError(errorCodes.AUTH_OTP_EXPIRED, 'OTP has expired. Please request a new one.', 400);
-    }
-
-    if (otpRecord.attempts >= 3) {
-      await OTP.deleteOne({ email: email.toLowerCase() });
-      throw new AppError(errorCodes.AUTH_OTP_MAX_ATTEMPTS, 'Maximum OTP attempts exceeded. Please request a new code.', 400);
-    }
-
-    if (otpRecord.code !== otp) {
-      otpRecord.attempts += 1;
-      await otpRecord.save();
-      const remaining = 3 - otpRecord.attempts;
-      throw new AppError(errorCodes.AUTH_OTP_INVALID, `Incorrect OTP code. ${remaining} attempts remaining.`, 400);
-    }
-
-    // Mark email as verified
-    const user = await User.findOneAndUpdate(
-      { email: email.toLowerCase() },
-      { is_email_verified: true },
-      { new: true }
-    );
-
-    // Remove used OTP
-    await OTP.deleteOne({ email: email.toLowerCase() });
-
-    // Generate tokens
-    const tokens = await this._generateTokens(user);
-
-    logger.info('Email verified via OTP', { userId: user._id });
-
-    return { user, ...tokens };
   }
 
   /**
    * Login with email and password
    */
   async login({ email, password }) {
+    const normalizedEmail = email.toLowerCase();
+
+    // Check account lockout
+    await this._checkAccountLockout(normalizedEmail);
+
     // Find user with password field included
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password_hash');
+    const user = await User.findOne({ email: normalizedEmail }).select('+password_hash');
 
     if (!user) {
+      // Record failed attempt even for non-existent users (prevent user enumeration via timing)
+      await this._recordFailedLogin(normalizedEmail);
       throw new AppError(errorCodes.AUTH_INVALID_CREDENTIALS, 'Invalid email or password', 401);
     }
 
@@ -109,21 +83,15 @@ class AuthService {
       throw new AppError(errorCodes.AUTH_ACCOUNT_SUSPENDED, 'Account has been suspended', 403);
     }
 
-    if (!user.is_email_verified) {
-      // Re-send OTP
-      const otp = await this._generateOTP(email);
-      throw new AppError(
-        errorCodes.AUTH_EMAIL_NOT_VERIFIED,
-        'Email not verified. A new OTP has been sent.',
-        403
-      );
-    }
-
     // Compare password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      await this._recordFailedLogin(normalizedEmail, user._id);
       throw new AppError(errorCodes.AUTH_INVALID_CREDENTIALS, 'Invalid email or password', 401);
     }
+
+    // Successful login — clear failed attempts
+    await this._clearFailedLogins(normalizedEmail);
 
     // Update last login
     user.last_login = new Date();
@@ -232,61 +200,47 @@ class AuthService {
   }
 
   /**
-   * Resend OTP
-   */
-  async resendOTP(email) {
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      throw new AppError(errorCodes.USER_NOT_FOUND, 'No account with this email', 404);
-    }
-    if (user.is_email_verified) {
-      throw new AppError(errorCodes.AUTH_EMAIL_NOT_VERIFIED, 'Email is already verified', 400);
-    }
-
-    const otp = await this._generateOTP(email);
-    logger.info('OTP resent', { email });
-    return { message: 'OTP sent to your email', otp }; // Remove otp in production
-  }
-
-  /**
-   * Forgot password — send OTP
+   * Forgot password — send OTP to email
    */
   async forgotPassword(email) {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
-      // Don't reveal if email exists
+      // Don't reveal if email exists — always return success message
       return { message: 'If an account exists with this email, an OTP has been sent.' };
     }
 
-    const otp = await this._generateOTP(email);
-    logger.info('Forgot password OTP sent', { email });
-    return { message: 'If an account exists with this email, an OTP has been sent.', otp };
+    await this._generateOTP(email);
+    logger.info('Forgot password OTP sent', { email: email.toLowerCase() });
+    return { message: 'If an account exists with this email, an OTP has been sent.' };
   }
 
   /**
    * Reset password with OTP
    */
   async resetPassword({ email, otp, newPassword }) {
+    const normalizedEmail = email.toLowerCase();
+
     // Verify OTP first
-    const otpRecord = await OTP.findOne({ email: email.toLowerCase() });
+    const otpRecord = await OTP.findOne({ email: normalizedEmail });
 
     if (!otpRecord) {
       throw new AppError(errorCodes.AUTH_OTP_EXPIRED, 'OTP has expired', 400);
     }
 
     if (otpRecord.attempts >= 3) {
-      await OTP.deleteOne({ email: email.toLowerCase() });
+      await OTP.deleteOne({ email: normalizedEmail });
       throw new AppError(errorCodes.AUTH_OTP_MAX_ATTEMPTS, 'Maximum OTP attempts exceeded', 400);
     }
 
-    if (otpRecord.code !== otp) {
+    // Timing-safe comparison to prevent timing attacks
+    if (!timingSafeEqual(otpRecord.code, otp)) {
       otpRecord.attempts += 1;
       await otpRecord.save();
       throw new AppError(errorCodes.AUTH_OTP_INVALID, 'Incorrect OTP code', 400);
     }
 
     // Update password
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password_hash');
+    const user = await User.findOne({ email: normalizedEmail }).select('+password_hash');
     if (!user) {
       throw new AppError(errorCodes.USER_NOT_FOUND, 'User not found', 404);
     }
@@ -294,13 +248,16 @@ class AuthService {
     user.password_hash = newPassword;
     await user.save();
 
-    // Cleanup
-    await OTP.deleteOne({ email: email.toLowerCase() });
+    // Cleanup OTP and invalidate any existing sessions
+    await OTP.deleteOne({ email: normalizedEmail });
     const redis = getRedis();
     const storedRefreshHash = await redis.get(`auth:refresh:${user._id}`);
     if (storedRefreshHash) {
       await this._deleteRefreshTokenKeys(redis, user._id, storedRefreshHash);
     }
+
+    // Clear any lockout on successful password reset
+    await this._clearFailedLogins(normalizedEmail);
 
     logger.info('Password reset successful', { userId: user._id });
     return { message: 'Password reset successful. Please log in with your new password.' };
@@ -371,10 +328,10 @@ class AuthService {
   }
 
   /**
-   * Generate 6-digit OTP and store in MongoDB (10min TTL)
+   * Generate 6-digit OTP using CSPRNG and store in MongoDB (10min TTL)
    */
   async _generateOTP(email) {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = generateSecureOTP();
 
     await OTP.findOneAndUpdate(
       { email: email.toLowerCase() },
@@ -382,10 +339,71 @@ class AuthService {
       { upsert: true, new: true }
     );
 
-    // TODO: Send OTP via SendGrid in production
-    logger.info('OTP generated', { email, otp: code }); // Remove otp from logs in production
+    // In development: log OTP at debug level only (won't appear in prod info-level logs)
+    // In production: send via SendGrid (TODO)
+    logger.debug('OTP generated for password reset', { email: email.toLowerCase() });
 
     return code;
+  }
+
+  // ── Account Lockout ──
+
+  /**
+   * Check if account is locked due to too many failed login attempts
+   */
+  async _checkAccountLockout(email) {
+    const redis = getRedis();
+    const lockoutKey = `auth:lockout:${email}`;
+    const isLocked = await redis.get(lockoutKey);
+
+    if (isLocked) {
+      const ttl = await redis.ttl(lockoutKey);
+      const minutesLeft = Math.ceil(ttl / 60);
+      logger.warn('Login attempt on locked account', { email });
+      throw new AppError(
+        errorCodes.AUTH_ACCOUNT_LOCKED,
+        `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minutes.`,
+        429
+      );
+    }
+  }
+
+  /**
+   * Record a failed login attempt. Lock account after MAX_LOGIN_ATTEMPTS.
+   */
+  async _recordFailedLogin(email, userId = null) {
+    const redis = getRedis();
+    const attemptsKey = `auth:failed_attempts:${email}`;
+
+    const attempts = await redis.incr(attemptsKey);
+    // Set TTL on first attempt (window resets after 15 minutes of no attempts)
+    if (attempts === 1) {
+      await redis.expire(attemptsKey, LOCKOUT_DURATION_SECONDS);
+    }
+
+    logger.warn('Failed login attempt', {
+      email,
+      userId: userId?.toString() || 'unknown',
+      attemptNumber: attempts,
+    });
+
+    if (attempts >= MAX_LOGIN_ATTEMPTS) {
+      // Lock the account
+      await redis.set(`auth:lockout:${email}`, '1', 'EX', LOCKOUT_DURATION_SECONDS);
+      await redis.del(attemptsKey); // Reset counter
+      logger.warn('Account locked due to failed attempts', { email, attempts });
+    }
+  }
+
+  /**
+   * Clear failed login attempts (after successful login or password reset)
+   */
+  async _clearFailedLogins(email) {
+    const redis = getRedis();
+    const pipeline = redis.pipeline();
+    pipeline.del(`auth:failed_attempts:${email}`);
+    pipeline.del(`auth:lockout:${email}`);
+    await pipeline.exec();
   }
 }
 

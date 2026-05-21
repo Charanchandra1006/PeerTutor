@@ -66,9 +66,11 @@ class AdminService {
     if (role) filter.role = role;
     if (is_active !== undefined) filter.is_active = is_active === 'true';
     if (search) {
+      const { escapeRegex } = require('../../utils/sanitize');
+      const safeSearch = escapeRegex(search);
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { email: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 
