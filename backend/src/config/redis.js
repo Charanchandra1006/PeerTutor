@@ -11,15 +11,10 @@ const createRedisClient = () => {
   if (redis) return redis;
 
   redis = new Redis(config.redis.url, {
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
     retryStrategy(times) {
-      const delay = Math.min(times * 200, 5000);
-      logger.warn(`Redis retry attempt ${times}, waiting ${delay}ms`);
-      return delay;
-    },
-    reconnectOnError(err) {
-      const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
-      return targetErrors.some((e) => err.message.includes(e));
+      return Math.min(times * 200, 5000);
     },
   });
 
