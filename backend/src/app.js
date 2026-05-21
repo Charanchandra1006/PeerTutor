@@ -47,7 +47,7 @@ io.use(async (socket, next) => {
     }
 
     const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, config.jwt.publicKey, { algorithms: ['RS256'] });
+    const decoded = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'] });
     socket.userId = decoded.sub;
     socket.userRole = decoded.role;
     next();
@@ -209,7 +209,7 @@ try {
     try {
       const token = authHeader.split(' ')[1];
       const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(token, config.jwt.publicKey, { algorithms: ['RS256'] });
+      const decoded = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'] });
       if (decoded.role !== 'admin') {
         return res.status(403).send('Forbidden');
       }

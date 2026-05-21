@@ -24,8 +24,8 @@ const authenticateToken = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
 
-    const decoded = jwt.verify(token, config.jwt.publicKey, {
-      algorithms: ['RS256'],
+    const decoded = jwt.verify(token, config.jwt.secret, {
+      algorithms: ['HS256'],
     });
 
     // Check if user still exists and is active
@@ -90,8 +90,8 @@ const optionalAuth = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, config.jwt.publicKey, {
-      algorithms: ['RS256'],
+    const decoded = jwt.verify(token, config.jwt.secret, {
+      algorithms: ['HS256'],
     });
 
     const user = await User.findById(decoded.sub).select('-password_hash');

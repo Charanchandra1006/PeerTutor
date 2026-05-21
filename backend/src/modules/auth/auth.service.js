@@ -285,9 +285,9 @@ class AuthService {
         email: user.email,
         role: user.role,
       },
-      config.jwt.privateKey,
+      config.jwt.secret,
       {
-        algorithm: 'RS256',
+        algorithm: 'HS256',
         expiresIn: config.jwt.accessExpires,
         issuer: 'ptm-api',
       }

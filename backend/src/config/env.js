@@ -19,8 +19,7 @@ const envSchema = Joi.object({
   REDIS_URL: Joi.string().required().description('Redis connection URL'),
 
   // JWT
-  JWT_PRIVATE_KEY: Joi.string().required().description('RS256 private key (PEM format)'),
-  JWT_PUBLIC_KEY: Joi.string().required().description('RS256 public key (PEM format)'),
+  JWT_SECRET: Joi.string().required().description('HS256 secret key'),
   JWT_ACCESS_EXPIRES: Joi.string().default('15m'),
   JWT_REFRESH_EXPIRES: Joi.string().default('7d'),
 
@@ -102,8 +101,7 @@ module.exports = {
   },
 
   jwt: {
-    privateKey: envVars.JWT_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    publicKey: envVars.JWT_PUBLIC_KEY.replace(/\\n/g, '\n'),
+    secret: envVars.JWT_SECRET,
     accessExpires: envVars.JWT_ACCESS_EXPIRES,
     refreshExpires: envVars.JWT_REFRESH_EXPIRES,
   },
