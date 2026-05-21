@@ -111,7 +111,7 @@ export default function LoginPage() {
 
           {/* Google Login */}
           <button
-            onClick={() => window.location.href = '/api/v1/auth/google'}
+            onClick={() => window.location.href = `${import.meta.env.VITE_API_URL}/api/v1/auth/google`}
             className="btn-secondary w-full gap-2"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
