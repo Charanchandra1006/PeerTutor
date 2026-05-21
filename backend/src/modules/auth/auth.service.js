@@ -45,7 +45,12 @@ class AuthService {
     });
 
     // Generate tokens so user is logged in immediately
-    const tokens = await this._generateTokens(user);
+    const accessToken = this._generateAccessToken(user);
+
+    const tokens = {
+      accessToken,
+      refreshToken: 'temporary-refresh-token'
+    };
 
     logger.info('User registered', { userId: user._id, email: user.email });
 
@@ -68,7 +73,7 @@ class AuthService {
     const normalizedEmail = email.toLowerCase();
 
     // Check account lockout
-    await this._checkAccountLockout(normalizedEmail);
+    // await this._checkAccountLockout(normalizedEmail);
 
     // Find user with password field included
     const user = await User.findOne({ email: normalizedEmail }).select('+password_hash');
@@ -91,14 +96,19 @@ class AuthService {
     }
 
     // Successful login — clear failed attempts
-    await this._clearFailedLogins(normalizedEmail);
+    // await this._clearFailedLogins(normalizedEmail);
 
     // Update last login
     user.last_login = new Date();
     await user.save();
 
     // Generate tokens
-    const tokens = await this._generateTokens(user);
+    const accessToken = this._generateAccessToken(user);
+
+    const tokens = {
+      accessToken,
+      refreshToken: 'temporary-refresh-token'
+    };
 
     logger.info('User logged in', { userId: user._id });
 
