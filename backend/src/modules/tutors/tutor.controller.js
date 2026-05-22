@@ -1,5 +1,7 @@
 const tutorService = require('./tutor.service');
 const apiResponse = require('../../utils/apiResponse');
+const axios = require('axios');
+const config = require('../../config/env');
 
 class TutorController {
   async createProfile(req, res) {
@@ -25,6 +27,20 @@ class TutorController {
   async searchTutors(req, res) {
     const { tutors, total, page, limit } = await tutorService.searchTutors(req.query);
     return apiResponse.paginated(res, tutors, page, limit, total);
+  }
+
+  async matchTutors(req, res) {
+    try {
+      const { subject, top_n = 10 } = req.body;
+      const response = await axios.post(`${config.ai.engineUrl}/match`, {
+        student_id: req.user._id.toString(),
+        subject,
+        top_n
+      });
+      return res.status(200).json(response.data);
+    } catch (error) {
+      return apiResponse.error(res, 'AI_ENGINE_ERROR', 'Failed to match tutors from AI engine', 500);
+    }
   }
 
   async updateAvailability(req, res) {

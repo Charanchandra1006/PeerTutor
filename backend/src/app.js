@@ -22,6 +22,7 @@ const reviewRoutes = require('./modules/reviews/review.routes');
 const notificationRoutes = require('./modules/notifications/notification.routes');
 const adminRoutes = require('./modules/admin/admin.routes');
 const groupSessionRoutes = require('./modules/group-sessions/group-session.routes');
+const aiRoutes = require('./modules/ai/ai.routes');
 
 // ── Create Express App ──
 const app = express();
@@ -166,6 +167,7 @@ app.use(`${API_PREFIX}/reviews`, reviewRoutes);
 app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/group-sessions`, groupSessionRoutes);
+app.use(`${API_PREFIX}/ai`, aiRoutes);
 
 // ── Prometheus Metrics (if prom-client is available) ──
 try {

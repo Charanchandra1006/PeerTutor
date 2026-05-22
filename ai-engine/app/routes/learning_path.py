@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 from app.services.db import get_db
+from app.services.llm import llm_service
 from bson import ObjectId
 
 router = APIRouter()
@@ -37,16 +38,35 @@ async def generate_learning_path(request: LearningPathRequest):
         {"subjects": subject["_id"]}
     ).sort("avg_rating", -1).to_list(length=10)
 
-    # Generate weekly plan
+    # Generate weekly plan using LLM
+    prompt = f"Provide a {request.weeks}-week syllabus for '{subject['name']}'. For each week, provide a focus area and 2 milestones. Format strictly as:\nWeek 1: [Focus] | [Milestone 1], [Milestone 2]\nWeek 2: [Focus] | [Milestone 1], [Milestone 2]"
+    ai_text = await llm_service.generate_text(prompt)
+    
+    llm_weeks = {}
+    for line in ai_text.split('\n'):
+        line = line.strip()
+        if line.lower().startswith('week'):
+            try:
+                parts = line.split(':', 1)
+                week_num = int(parts[0].lower().replace('week', '').strip())
+                focus_and_milestones = parts[1].split('|')
+                focus = focus_and_milestones[0].strip()
+                milestones = [m.strip() for m in focus_and_milestones[1].split(',')] if len(focus_and_milestones) > 1 else []
+                llm_weeks[week_num] = {"focus": focus, "milestones": milestones}
+            except Exception:
+                pass
+
     weeks = []
     for week_num in range(1, request.weeks + 1):
         # Rotate tutors for variety
         tutor_idx = (week_num - 1) % max(len(tutors), 1)
         tutor = tutors[tutor_idx] if tutors else None
 
+        week_data = llm_weeks.get(week_num)
+
         week_plan = {
             "week": week_num,
-            "focus": _get_weekly_focus(week_num, request.weeks),
+            "focus": week_data["focus"] if week_data else _get_weekly_focus(week_num, request.weeks),
             "sessions": [
                 {
                     "day": "Monday" if week_num % 2 == 1 else "Tuesday",
@@ -61,7 +81,7 @@ async def generate_learning_path(request: LearningPathRequest):
                     "suggested_tutor_id": str(tutor["_id"]) if tutor else None,
                 },
             ],
-            "milestones": _get_milestones(week_num, request.weeks),
+            "milestones": week_data["milestones"] if week_data and week_data["milestones"] else _get_milestones(week_num, request.weeks),
         }
         weeks.append(week_plan)
 

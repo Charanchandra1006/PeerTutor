@@ -21,6 +21,12 @@ router.get(
   tutorController.searchTutors
 );
 
+router.post(
+  '/match',
+  authenticateToken,
+  tutorController.matchTutors
+);
+
 router.get(
   '/subjects',
   tutorController.listSubjects
