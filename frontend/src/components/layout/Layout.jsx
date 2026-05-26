@@ -6,7 +6,7 @@ import { cn, getInitials } from '../../lib/utils';
 import api from '../../lib/api';
 import {
   LayoutDashboard, Search, CalendarDays, Wallet, User,
-  GraduationCap, Shield, Bell, LogOut, Menu, X, ChevronDown, Users
+  GraduationCap, Shield, Bell, LogOut, Menu, X, ChevronDown, Users, Gamepad2
 } from 'lucide-react';
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/bookings', label: 'Bookings', icon: CalendarDays },
   { to: '/group-sessions', label: 'Group Sessions', icon: Users },
   { to: '/wallet', label: 'Wallet', icon: Wallet },
+  { to: '/escape-room', label: 'Escape Rooms', icon: Gamepad2 },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 

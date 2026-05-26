@@ -23,6 +23,7 @@ const notificationRoutes = require('./modules/notifications/notification.routes'
 const adminRoutes = require('./modules/admin/admin.routes');
 const groupSessionRoutes = require('./modules/group-sessions/group-session.routes');
 const aiRoutes = require('./modules/ai/ai.routes');
+const escapeRoomRoutes = require('./modules/escape-room/escapeRoom.routes');
 
 // ── Create Express App ──
 const app = express();
@@ -168,6 +169,7 @@ app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/group-sessions`, groupSessionRoutes);
 app.use(`${API_PREFIX}/ai`, aiRoutes);
+app.use(`${API_PREFIX}/escape-room`, escapeRoomRoutes);
 
 // ── Prometheus Metrics (if prom-client is available) ──
 try {

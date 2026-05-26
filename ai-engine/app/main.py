@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.match import router as match_router
 from app.routes.health import router as health_router
 from app.routes.learning_path import router as learning_path_router
+from app.routes.escape_room import router as escape_room_router
 
 
 @asynccontextmanager
@@ -46,3 +47,8 @@ app.add_middleware(
 app.include_router(health_router, tags=["Health"])
 app.include_router(match_router, prefix="/match", tags=["Match"])
 app.include_router(learning_path_router, prefix="/learning-path", tags=["Learning Path"])
+app.include_router(escape_room_router, prefix="/escape-room", tags=["Escape Room"])
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the PTM AI Engine", "status": "online", "docs": "/docs"}

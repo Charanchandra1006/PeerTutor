@@ -16,6 +16,8 @@ import LandingPage from './pages/LandingPage';
 import GroupSessionsPage from './pages/GroupSessionsPage';
 import GroupSessionDetailPage from './pages/GroupSessionDetailPage';
 import CreateGroupSessionPage from './pages/CreateGroupSessionPage';
+import EscapeRoomLobbyPage from './pages/EscapeRoomLobbyPage';
+import EscapeRoomGamePage from './pages/EscapeRoomGamePage';
 
 /**
  * Protected route wrapper
@@ -71,6 +73,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/escape-room" element={<EscapeRoomLobbyPage />} />
       </Route>
 
       {/* Session Room — Full screen, no sidebar */}
@@ -79,6 +82,16 @@ export default function App() {
         element={
           <ProtectedRoute>
             <SessionRoomPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Escape Room Game — Full screen, no sidebar */}
+      <Route
+        path="/escape-room/:id/play"
+        element={
+          <ProtectedRoute>
+            <EscapeRoomGamePage />
           </ProtectedRoute>
         }
       />

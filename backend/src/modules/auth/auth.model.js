@@ -89,7 +89,7 @@ const userSchema = new mongoose.Schema(
     badges: [{
       type: {
         type: String,
-        enum: ['quick_learner', 'session_streak', 'subject_master', 'top_rated', 'most_booked', 'community_pillar', 'first_session'],
+        enum: ['quick_learner', 'session_streak', 'subject_master', 'top_rated', 'most_booked', 'community_pillar', 'first_session', 'bug_hunter', 'system_savior', 'master_debugger', 'escape_artist'],
       },
       earned_at: { type: Date, default: Date.now },
     }],
