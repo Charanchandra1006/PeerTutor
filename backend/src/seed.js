@@ -75,7 +75,7 @@ async function seed() {
     const admin = await User.create({
       email: 'admin@vardhaman.org',
       password_hash: 'Admin@123',
-      name: 'Dr. Kavitha Admin',
+      name: 'M. Charan Chandra ',
       role: 'admin',
       year: null,
       branch: 'CSE',
