@@ -42,7 +42,7 @@ const reviewSchema = new mongoose.Schema(
     },
     is_approved: {
       type: Boolean,
-      default: true, // Auto-approve for now; can be moderated
+      default: false, // Reviews require moderation (24h window per PRD)
     },
     mod_note: {
       type: String,

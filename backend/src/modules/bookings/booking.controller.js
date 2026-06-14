@@ -48,6 +48,11 @@ class BookingController {
     const link = await bookingService.getVideoLink(req.params.id, req.user._id);
     return apiResponse.success(res, link);
   }
+
+  async addResource(req, res) {
+    const session = await bookingService.addResource(req.params.id, req.user._id, req.body);
+    return apiResponse.success(res, session);
+  }
 }
 
 module.exports = new BookingController();

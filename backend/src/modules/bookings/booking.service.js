@@ -315,6 +315,26 @@ class BookingService {
       throw new AppError(errorCodes.AUTH_FORBIDDEN, 'You do not have access to this session', 403);
     }
   }
+  /**
+   * Add a resource to a session
+   */
+  async addResource(sessionId, userId, { name, url, type }) {
+    const session = await Session.findById(sessionId).populate('tutor_id');
+    if (!session) throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Session not found', 404);
+
+    this._verifyParticipant(session, userId);
+
+    session.resources.push({
+      name,
+      url,
+      uploaded_by: userId,
+      type: type || 'link',
+    });
+    await session.save();
+
+    logger.info('Resource added to session', { sessionId, userId, name });
+    return session;
+  }
 }
 
 module.exports = new BookingService();

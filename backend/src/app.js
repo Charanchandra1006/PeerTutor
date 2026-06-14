@@ -29,6 +29,10 @@ const escapeRoomRoutes = require('./modules/escape-room/escapeRoom.routes');
 const app = express();
 const httpServer = createServer(app);
 
+// ── Passport (Google OAuth) ──
+const passport = require('./modules/auth/passport');
+app.use(passport.initialize());
+
 // ── Socket.io Setup ──
 const io = new SocketServer(httpServer, {
   cors: {

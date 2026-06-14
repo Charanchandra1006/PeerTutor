@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
@@ -7,10 +7,41 @@ import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuthStore();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Handle Google OAuth callback tokens
+  useEffect(() => {
+    const accessToken = searchParams.get('accessToken');
+    const refreshToken = searchParams.get('refreshToken');
+    const userId = searchParams.get('userId');
+    const error = searchParams.get('error');
+
+    if (error) {
+      toast.error('Google sign-in failed. Please try again.');
+      return;
+    }
+
+    if (accessToken && refreshToken && userId) {
+      // Fetch user profile with the token
+      const fetchUser = async () => {
+        try {
+          // Store tokens first so the API interceptor uses them
+          login({ _id: userId }, accessToken, refreshToken);
+          const res = await api.get('/auth/me');
+          login(res.data, accessToken, refreshToken);
+          toast.success(`Welcome, ${res.data.name}!`);
+          navigate('/dashboard', { replace: true });
+        } catch {
+          toast.error('Failed to complete Google sign-in');
+        }
+      };
+      fetchUser();
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,10 +142,11 @@ export default function LoginPage() {
 
           {/* Google Login */}
           <button
-            onClick={() => window.location.href = `${import.meta.env.VITE_API_URL}/api/v1/auth/google`}
-            className="btn-secondary w-full gap-2"
+            type="button"
+            onClick={() => window.location.href = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/v1/auth/google` : '/api/v1/auth/google'}
+            className="w-full flex items-center justify-center px-4 py-3 border border-slate-700/50 rounded-xl hover:bg-slate-800/50 transition-colors duration-200"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>

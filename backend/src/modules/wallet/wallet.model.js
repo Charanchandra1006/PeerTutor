@@ -67,7 +67,7 @@ const transactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['credit', 'debit', 'reserve', 'release', 'refund', 'topup', 'platform_fee', 'welcome'],
+      enum: ['credit', 'debit', 'reserve', 'release', 'refund', 'topup', 'platform_fee', 'welcome', 'dispute', 'expiry'],
       required: true,
       index: true,
     },

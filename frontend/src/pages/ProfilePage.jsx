@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { getInitials } from '../lib/utils';
-import { User, Mail, GraduationCap, BookOpen, Award, Edit, Save, Loader2 } from 'lucide-react';
+import { useSavedTutors } from '../hooks/useResources';
+import { getInitials, cn } from '../lib/utils';
+import { User, Mail, GraduationCap, BookOpen, Award, Edit, Save, Loader2, Bell, Heart } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -15,6 +17,16 @@ export default function ProfilePage() {
     learning_style: user?.learning_style || '',
   });
   const [loading, setLoading] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState(
+    user?.notification_preferences || {
+      email_booking: true,
+      email_reminder: true,
+      in_app: true,
+      push: true,
+    }
+  );
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const { data: savedTutors = [] } = useSavedTutors();
 
   const handleSave = async () => {
     setLoading(true);
@@ -27,6 +39,22 @@ export default function ProfilePage() {
       toast.error('Failed to update profile');
     }
     setLoading(false);
+  };
+
+  const handleSavePrefs = async () => {
+    setSavingPrefs(true);
+    try {
+      const res = await api.patch('/users/me', { notification_preferences: notifPrefs });
+      updateUser(res.data);
+      toast.success('Notification preferences saved!');
+    } catch {
+      toast.error('Failed to save preferences');
+    }
+    setSavingPrefs(false);
+  };
+
+  const togglePref = (key) => {
+    setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -154,6 +182,82 @@ export default function ProfilePage() {
           </div>
         ) : (
           <p className="text-sm text-gray-400">No badges yet. Complete sessions to earn badges!</p>
+        )}
+      </div>
+
+      {/* Notification Preferences */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Bell className="h-4 w-4 text-brand-500" />
+            Notification Preferences
+          </h3>
+          <button
+            onClick={handleSavePrefs}
+            disabled={savingPrefs}
+            className="btn-secondary text-sm flex items-center gap-1"
+          >
+            {savingPrefs ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+            Save
+          </button>
+        </div>
+        <div className="space-y-3">
+          {[
+            { key: 'email_booking', label: 'Email — Booking confirmations', desc: 'Get notified when a session is booked or cancelled' },
+            { key: 'email_reminder', label: 'Email — Session reminders', desc: 'Receive reminders before upcoming sessions' },
+            { key: 'in_app', label: 'In-app notifications', desc: 'Show notification badge and dropdown' },
+            { key: 'push', label: 'Push notifications', desc: 'Browser push notifications (when available)' },
+          ].map((pref) => (
+            <div key={pref.key} className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium text-gray-900">{pref.label}</p>
+                <p className="text-xs text-gray-500">{pref.desc}</p>
+              </div>
+              <button
+                onClick={() => togglePref(pref.key)}
+                className={cn(
+                  'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                  notifPrefs[pref.key] ? 'bg-brand-600' : 'bg-gray-200'
+                )}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow',
+                    notifPrefs[pref.key] ? 'translate-x-6' : 'translate-x-1'
+                  )}
+                />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Saved Tutors */}
+      <div className="card">
+        <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Heart className="h-4 w-4 text-red-500" />
+          Saved Tutors
+        </h3>
+        {savedTutors.length === 0 ? (
+          <p className="text-sm text-gray-400">No saved tutors yet. Browse the discovery page to save your favorites!</p>
+        ) : (
+          <div className="space-y-2">
+            {savedTutors.map((tutor) => (
+              <Link
+                key={tutor._id}
+                to={`/tutors/${tutor._id}`}
+                className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-accent-400 text-white text-xs font-bold">
+                  {getInitials(tutor.name)}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{tutor.name}</p>
+                  <p className="text-xs text-gray-500">{tutor.email}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
       </div>
     </div>

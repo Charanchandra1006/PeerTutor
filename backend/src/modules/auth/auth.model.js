@@ -100,6 +100,12 @@ const userSchema = new mongoose.Schema(
     timetable: {
       type: String, // CSV or JSON stored timetable for smart scheduling
     },
+    notification_preferences: {
+      email_booking: { type: Boolean, default: true },
+      email_reminder: { type: Boolean, default: true },
+      in_app: { type: Boolean, default: true },
+      push: { type: Boolean, default: true },
+    },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

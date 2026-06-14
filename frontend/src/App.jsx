@@ -18,6 +18,11 @@ import GroupSessionDetailPage from './pages/GroupSessionDetailPage';
 import CreateGroupSessionPage from './pages/CreateGroupSessionPage';
 import EscapeRoomLobbyPage from './pages/EscapeRoomLobbyPage';
 import EscapeRoomGamePage from './pages/EscapeRoomGamePage';
+import NotificationsPage from './pages/NotificationsPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import LearningPathPage from './pages/LearningPathPage';
+import TutorAnalyticsPage from './pages/TutorAnalyticsPage';
+import ResourceLibraryPage from './pages/ResourceLibraryPage';
 
 /**
  * Protected route wrapper
@@ -74,6 +79,18 @@ export default function App() {
           }
         />
         <Route path="/escape-room" element={<EscapeRoomLobbyPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/learning-path" element={<LearningPathPage />} />
+        <Route path="/resources" element={<ResourceLibraryPage />} />
+        <Route
+          path="/tutor-analytics"
+          element={
+            <ProtectedRoute roles={['tutor', 'both']}>
+              <TutorAnalyticsPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       {/* Session Room — Full screen, no sidebar */}

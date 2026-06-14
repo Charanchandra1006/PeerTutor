@@ -19,7 +19,7 @@ class UserService {
    * Update user profile
    */
   async updateProfile(userId, updateData) {
-    const allowedFields = ['name', 'year', 'branch', 'learning_style', 'profile_photo_url', 'timetable'];
+    const allowedFields = ['name', 'year', 'branch', 'learning_style', 'profile_photo_url', 'timetable', 'notification_preferences'];
     const filteredData = {};
     for (const key of allowedFields) {
       if (updateData[key] !== undefined) {
@@ -70,6 +70,17 @@ class UserService {
   }
 
   /**
+   * Get student leaderboard (public)
+   */
+  async getLeaderboard(limit = 20) {
+    const students = await User.find({ role: 'student', is_active: true })
+      .select('name profile_photo_url badges xp_points year branch')
+      .sort({ xp_points: -1 })
+      .limit(limit);
+    return students;
+  }
+
+  /**
    * Save/unsave a tutor
    */
   async toggleSaveTutor(userId, tutorId) {
@@ -107,6 +118,52 @@ class UserService {
     if (!user) throw new AppError(errorCodes.USER_NOT_FOUND, 'User not found', 404);
     logger.info(`User ${isActive ? 'activated' : 'suspended'}`, { userId });
     return user;
+  }
+
+  /**
+   * Record a recently viewed tutor (Redis-backed, last 10)
+   */
+  async addRecentView(userId, tutorId) {
+    try {
+      const { getRedis } = require('../../config/redis');
+      const redis = getRedis();
+      const key = `user:recent_viewed:${userId}`;
+
+      // Remove if already exists (avoid duplicates), then push to front
+      await redis.lrem(key, 0, tutorId);
+      await redis.lpush(key, tutorId);
+      await redis.ltrim(key, 0, 9); // Keep only last 10
+      await redis.expire(key, 30 * 24 * 60 * 60); // 30 day TTL
+    } catch (err) {
+      logger.warn('Failed to record recent view', { error: err.message });
+    }
+  }
+
+  /**
+   * Get recently viewed tutors
+   */
+  async getRecentlyViewed(userId) {
+    try {
+      const { getRedis } = require('../../config/redis');
+      const { TutorProfile } = require('../tutors/tutor.model');
+      const redis = getRedis();
+      const key = `user:recent_viewed:${userId}`;
+
+      const tutorIds = await redis.lrange(key, 0, 9);
+      if (!tutorIds || tutorIds.length === 0) return [];
+
+      const tutors = await TutorProfile.find({ _id: { $in: tutorIds } })
+        .populate('user_id', 'name email profile_photo_url year branch')
+        .populate('subjects', 'name code')
+        .select('user_id subjects rate_per_hour avg_rating total_sessions is_verified_badge');
+
+      // Preserve Redis order
+      const tutorMap = new Map(tutors.map(t => [t._id.toString(), t]));
+      return tutorIds.map(id => tutorMap.get(id)).filter(Boolean);
+    } catch (err) {
+      logger.warn('Failed to get recent views', { error: err.message });
+      return [];
+    }
   }
 }
 

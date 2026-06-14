@@ -8,7 +8,7 @@ const { z } = require('zod');
 const { paginationSchema } = require('../auth/auth.validation');
 
 const transactionQuerySchema = paginationSchema.extend({
-  type: z.enum(['credit', 'debit', 'reserve', 'release', 'refund', 'topup', 'platform_fee', 'welcome']).optional(),
+  type: z.enum(['credit', 'debit', 'reserve', 'release', 'refund', 'topup', 'platform_fee', 'welcome', 'dispute', 'expiry']).optional(),
   from_date: z.string().datetime().optional(),
   to_date: z.string().datetime().optional(),
 });
@@ -35,6 +35,32 @@ router.post(
   requireRole('admin'),
   validate({ body: topUpSchema }),
   walletController.adminTopUp
+);
+// ── Dispute Routes ──
+const disputeSchema = z.object({
+  session_id: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  reason: z.string().max(500).optional(),
+});
+
+const resolveDisputeSchema = z.object({
+  session_id: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  resolution: z.enum(['full_refund', 'partial_refund', 'no_refund']),
+  refund_percent: z.number().int().min(0).max(100).optional(),
+});
+
+router.post(
+  '/dispute',
+  authenticateToken,
+  validate({ body: disputeSchema }),
+  walletController.raiseDispute
+);
+
+router.post(
+  '/dispute/resolve',
+  authenticateToken,
+  requireRole('admin'),
+  validate({ body: resolveDisputeSchema }),
+  walletController.resolveDispute
 );
 
 module.exports = router;

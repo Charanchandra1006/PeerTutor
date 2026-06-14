@@ -134,8 +134,21 @@ const analyticsWorker = new Worker(
   { connection: getConnection(), concurrency: 1 }
 );
 
+// ── Credit Expiry Worker ──
+const creditExpiryQueue = createQueue('credit-expiry');
+const creditExpiryWorker = new Worker(
+  'credit-expiry',
+  async (job) => {
+    logger.info('Processing credit expiry job');
+    const walletService = require('../modules/wallet/wallet.service');
+    const result = await walletService.expireCredits();
+    logger.info('Credit expiry completed', result);
+  },
+  { connection: getConnection(), concurrency: 1 }
+);
+
 // Error handlers
-[emailWorker, notifWorker, aiWorker, analyticsWorker].forEach((worker) => {
+[emailWorker, notifWorker, aiWorker, analyticsWorker, creditExpiryWorker].forEach((worker) => {
   worker.on('failed', (job, err) => {
     logger.error(`Worker job failed: ${worker.name}`, {
       jobId: job?.id,
@@ -146,4 +159,8 @@ const analyticsWorker = new Worker(
 
 logger.info('🔄 BullMQ workers started');
 
-module.exports = { emailQueue, notificationQueue, aiQueue, analyticsQueue };
+// Setup credit expiry repeatable job
+const { setupCreditExpiryJob } = require('./creditExpiry');
+setupCreditExpiryJob().catch(err => logger.error('Credit expiry setup failed', { error: err.message }));
+
+module.exports = { emailQueue, notificationQueue, aiQueue, analyticsQueue, creditExpiryQueue };

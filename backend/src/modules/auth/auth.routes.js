@@ -51,6 +51,47 @@ router.post(
   authController.resetPassword
 );
 
+// ── Google OAuth Routes ──
+const passport = require('./passport');
+const config = require('../../config/env');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
+const { getRedis } = require('../../config/redis');
+
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+
+router.get(
+  '/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: '/login?error=oauth_failed' }),
+  async (req, res) => {
+    try {
+      const user = req.user;
+      // Generate JWT tokens
+      const accessToken = jwt.sign(
+        { sub: user._id, email: user.email, role: user.role },
+        config.jwt.secret,
+        { algorithm: 'HS256', expiresIn: config.jwt.accessExpires, issuer: 'ptm-api' }
+      );
+
+      const refreshToken = uuidv4();
+      const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+      const redis = getRedis();
+      const ttlSeconds = 7 * 24 * 60 * 60;
+      const pipeline = redis.pipeline();
+      pipeline.set(`auth:refresh:${user._id}`, tokenHash, 'EX', ttlSeconds);
+      pipeline.set(`auth:refresh_lookup:${tokenHash}`, user._id.toString(), 'EX', ttlSeconds);
+      await pipeline.exec();
+
+      // Redirect to frontend with tokens
+      const frontendUrl = config.frontendUrl;
+      res.redirect(`${frontendUrl}/login?accessToken=${accessToken}&refreshToken=${refreshToken}&userId=${user._id}`);
+    } catch (err) {
+      res.redirect(`${config.frontendUrl}/login?error=oauth_failed`);
+    }
+  }
+);
+
 // ── Protected Routes ──
 router.post('/logout', authenticateToken, authController.logout);
 router.get('/me', authenticateToken, authController.getMe);

@@ -20,6 +20,18 @@ class WalletController {
     const wallet = await walletService.adminTopUp(user_id, amount, req.user._id, reason);
     return apiResponse.success(res, wallet);
   }
+
+  async raiseDispute(req, res) {
+    const { session_id, reason } = req.body;
+    const result = await walletService.raiseDispute(req.user._id, session_id, reason);
+    return apiResponse.success(res, result, 'Dispute raised successfully');
+  }
+
+  async resolveDispute(req, res) {
+    const { session_id, resolution, refund_percent } = req.body;
+    const result = await walletService.resolveDispute(req.user._id, session_id, resolution, refund_percent);
+    return apiResponse.success(res, result, 'Dispute resolved');
+  }
 }
 
 module.exports = new WalletController();

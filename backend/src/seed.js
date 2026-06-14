@@ -126,6 +126,16 @@ async function seed() {
           { day: 3, start_time: '14:00', end_time: '17:00' },
           { day: 5, start_time: '10:00', end_time: '13:00' },
         ],
+        resources: [
+          {
+            title: `Study Guide - ${t.name}`,
+            description: 'Comprehensive notes and practice problems.',
+            file_url: 'https://example.com/notes.pdf',
+            subject_id: subjectIds.length > 0 ? subjectIds[0] : null,
+            credit_cost: Math.floor(Math.random() * 5),
+            download_count: Math.floor(Math.random() * 50),
+          }
+        ],
       });
 
       await Wallet.create({
@@ -156,6 +166,10 @@ async function seed() {
         is_active: true,
         is_profile_complete: true,
         learning_style: ['visual', 'auditory', 'reading', 'kinesthetic'][i % 4],
+        xp_points: Math.floor(Math.random() * 500) + 100,
+        badges: [
+          { type: ['quick_learner', 'session_streak', 'subject_master', 'escape_artist'][i % 4], earned_at: new Date() }
+        ],
       });
 
       await Wallet.create({

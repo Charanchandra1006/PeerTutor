@@ -82,4 +82,17 @@ router.get(
   bookingController.getVideoLink
 );
 
+// ── Resource Upload ──
+const addResourceSchema = z.object({
+  name: z.string().min(1).max(200),
+  url: z.string().url().max(2000),
+  type: z.enum(['pdf', 'image', 'document', 'link']).optional().default('link'),
+});
+
+router.post(
+  '/:id/resources',
+  validate({ params: idParamSchema, body: addResourceSchema }),
+  bookingController.addResource
+);
+
 module.exports = router;

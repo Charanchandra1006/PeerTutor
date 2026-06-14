@@ -332,6 +332,167 @@ class WalletService {
       session.endSession();
     }
   }
+
+  /**
+   * Raise a dispute on a transaction (student action)
+   * Allowed within 48 hours of the transaction.
+   */
+  async raiseDispute(userId, sessionId, reason) {
+    const { Session } = require('../bookings/booking.model');
+    const sessionDoc = await Session.findById(sessionId);
+    if (!sessionDoc) {
+      throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Session not found', 404);
+    }
+
+    // Verify user is the student of this session
+    if (sessionDoc.student_id.toString() !== userId.toString()) {
+      throw new AppError(errorCodes.AUTH_FORBIDDEN, 'Only the student can raise a dispute', 403);
+    }
+
+    // Check 48h window
+    const hoursSinceCompletion = (Date.now() - new Date(sessionDoc.updated_at).getTime()) / (1000 * 60 * 60);
+    if (hoursSinceCompletion > 48) {
+      throw new AppError(errorCodes.WALLET_TRANSACTION_FAILED, 'Disputes must be raised within 48 hours', 400);
+    }
+
+    if (sessionDoc.status === 'disputed') {
+      throw new AppError(errorCodes.WALLET_TRANSACTION_FAILED, 'A dispute already exists for this session', 409);
+    }
+
+    sessionDoc.status = 'disputed';
+    await sessionDoc.save();
+
+    // Create a dispute transaction record
+    const wallet = await Wallet.findOne({ user_id: userId });
+    await Transaction.create({
+      user_id: userId,
+      type: 'dispute',
+      amount: sessionDoc.credits_reserved,
+      balance_after: wallet ? wallet.balance : 0,
+      reference_id: sessionId,
+      reference_type: 'dispute',
+      description: `Dispute raised: ${reason || 'No reason provided'}`,
+    });
+
+    logger.info('Dispute raised', { userId, sessionId, reason });
+    return { sessionId, status: 'disputed', reason };
+  }
+
+  /**
+   * Resolve a dispute (admin action)
+   * resolution: 'full_refund' | 'partial_refund' | 'no_refund'
+   */
+  async resolveDispute(adminId, sessionId, resolution, refundPercent = 100) {
+    const { Session } = require('../bookings/booking.model');
+    const dbSession = await mongoose.startSession();
+    dbSession.startTransaction();
+
+    try {
+      const sessionDoc = await Session.findById(sessionId).session(dbSession);
+      if (!sessionDoc || sessionDoc.status !== 'disputed') {
+        throw new AppError(errorCodes.SESSION_NOT_FOUND, 'Disputed session not found', 404);
+      }
+
+      const { TutorProfile } = require('../tutors/tutor.model');
+      const tutorProfile = await TutorProfile.findById(sessionDoc.tutor_id);
+
+      if (resolution === 'full_refund' || resolution === 'partial_refund') {
+        const refundAmount = resolution === 'full_refund'
+          ? sessionDoc.credits_reserved
+          : Math.ceil(sessionDoc.credits_reserved * (refundPercent / 100));
+
+        // Refund to student
+        const studentWallet = await Wallet.findOne({ user_id: sessionDoc.student_id }).session(dbSession);
+        if (studentWallet) {
+          studentWallet.balance += refundAmount;
+          await studentWallet.save({ session: dbSession });
+        }
+
+        // Deduct from tutor if already paid
+        if (sessionDoc.credits_released > 0 && tutorProfile) {
+          const tutorWallet = await Wallet.findOne({ user_id: tutorProfile.user_id }).session(dbSession);
+          if (tutorWallet) {
+            tutorWallet.balance = Math.max(0, tutorWallet.balance - refundAmount);
+            await tutorWallet.save({ session: dbSession });
+          }
+        }
+
+        await Transaction.create(
+          [{
+            user_id: sessionDoc.student_id,
+            type: 'refund',
+            amount: refundAmount,
+            balance_after: studentWallet ? studentWallet.balance : 0,
+            reference_id: sessionId,
+            reference_type: 'dispute',
+            description: `Dispute resolved: ${resolution} (${refundPercent}%)`,
+          }],
+          { session: dbSession }
+        );
+      }
+
+      sessionDoc.status = 'completed'; // Mark resolved
+      await sessionDoc.save({ session: dbSession });
+
+      await dbSession.commitTransaction();
+      logger.info('Dispute resolved', { adminId, sessionId, resolution, refundPercent });
+      return { sessionId, resolution };
+    } catch (error) {
+      await dbSession.abortTransaction();
+      if (error.isOperational) throw error;
+      throw new AppError(errorCodes.WALLET_TRANSACTION_FAILED, 'Failed to resolve dispute', 500);
+    } finally {
+      dbSession.endSession();
+    }
+  }
+
+  /**
+   * Expire credits older than CREDITS_EXPIRY_DAYS
+   * Called by cron job daily.
+   */
+  async expireCredits() {
+    const expiryDays = config.business.creditsExpiryDays;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - expiryDays);
+
+    // Find wallets that have balance > 0 and haven't had activity since cutoff
+    const inactiveWallets = await Wallet.find({
+      balance: { $gt: 0 },
+      updated_at: { $lt: cutoffDate },
+    });
+
+    let totalExpired = 0;
+
+    for (const wallet of inactiveWallets) {
+      // Check if there's been any transaction since cutoff
+      const recentTx = await Transaction.findOne({
+        user_id: wallet.user_id,
+        created_at: { $gte: cutoffDate },
+      });
+
+      if (!recentTx) {
+        const expiredAmount = wallet.balance;
+        wallet.balance = 0;
+        wallet.reserved_balance = 0;
+        await wallet.save();
+
+        await Transaction.create({
+          user_id: wallet.user_id,
+          type: 'expiry',
+          amount: expiredAmount,
+          balance_after: 0,
+          reference_type: 'system',
+          description: `Credits expired after ${expiryDays} days of inactivity`,
+        });
+
+        totalExpired += expiredAmount;
+        logger.info('Credits expired', { userId: wallet.user_id, amount: expiredAmount });
+      }
+    }
+
+    logger.info('Credit expiry job completed', { walletsChecked: inactiveWallets.length, totalExpired });
+    return { walletsChecked: inactiveWallets.length, totalExpired };
+  }
 }
 
 module.exports = new WalletService();
