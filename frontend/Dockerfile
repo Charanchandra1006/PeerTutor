@@ -1,12 +1,29 @@
-FROM node:20-alpine
-
+# Build stage
+FROM node:20-alpine as build
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
-
 COPY . .
+RUN npm run build
 
-EXPOSE 5173
+# Production stage
+FROM nginx:alpine
+# Copy built assets from build stage
+COPY --from=build /app/dist /usr/share/nginx/html
+# Add custom nginx config for React router fallback
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location /api/ { \
+        proxy_pass http://api:3000; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

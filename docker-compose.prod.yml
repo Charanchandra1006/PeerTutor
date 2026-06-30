@@ -70,7 +70,7 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:securepassword123@redis:6379
       - AI_ENGINE_URL=http://ai-engine:8000
     depends_on:
       mongodb:
@@ -109,7 +109,7 @@ services:
     env_file:
       - .env
     environment:
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:securepassword123@redis:6379
     depends_on:
       mongodb:
         condition: service_healthy
@@ -130,7 +130,7 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:securepassword123@redis:6379
     depends_on:
       mongodb:
         condition: service_healthy
